@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Calendar</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236b21a8'><path d='M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z'/><circle cx='8' cy='13' r='1.5' fill='%232563eb'/><circle cx='12' cy='13' r='1.5' fill='%232563eb'/><circle cx='16' cy='13' r='1.5' fill='%232563eb'/><circle cx='8' cy='17' r='1.5' fill='%232563eb'/><circle cx='12' cy='17' r='1.5' fill='%232563eb'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="app-header">
+        <div class="app-title">Intra Asia Calendar</div>
+        <div>
+            
+        </div>
+    </div>
+
+    <!-- KPI Display Cards -->
+    <div class="kpi-container">
+        <div class="kpi-card" id="kpi-total">
+            <div class="kpi-title">Total Employees</div>
+            <div class="kpi-value" id="val-total">0</div>
+        </div>
+        <div class="kpi-card" id="kpi-wfh">
+            <div class="kpi-title">WFH (Today)</div>
+            <div class="kpi-value" id="val-wfh">0</div>
+        </div>
+        <div class="kpi-card" id="kpi-wfo">
+            <div class="kpi-title">WFO (Today)</div>
+            <div class="kpi-value" id="val-wfo">0</div>
+        </div>
+        <div class="kpi-card" id="kpi-leave">
+            <div class="kpi-title">On Leave (Today)</div>
+            <div class="kpi-value" id="val-leave">0</div>
+        </div>
+        <div class="kpi-card" id="kpi-holiday">
+            <div class="kpi-title">Holidays (Month)</div>
+            <div class="kpi-value" id="val-holiday">0</div>
+        </div>
+    </div>
+
+    <!-- Filter Control Panel -->
+    <div class="filter-panel">
+        <div class="form-group">
+            <label>Search Employee</label>
+            <input type="text" id="filter-search" placeholder="Type name...">
+        </div>
+        <div class="form-group">
+            <label>Team</label>
+            <select id="filter-team">
+                <option value="ALL">All Teams</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Month</label>
+            <select id="filter-month"></select>
+        </div>
+        <div class="form-group">
+            <label>Year</label>
+            <select id="filter-year"></select>
+        </div>
+        <div class="btn-group">
+            <button class="btn" id="btn-prev-month">◄ Prev</button>
+            <button class="btn" id="btn-curr-month">Current Month</button>
+            <button class="btn" id="btn-next-month">Next ►</button>
+        </div>
+    </div>
+
+    <!-- Spreadsheet Calendar Grid -->
+    <div class="table-container">
+        <table class="spreadsheet-table" id="calendar-table">
+            <thead><tr id="calendar-header"></tr></thead>
+            <tbody id="calendar-body"></tbody>
+        </table>
+    </div>
+
+    <!-- KPI Detail Modal Container -->
+    <div id="kpi-modal-root"></div>
+
+    <script src="config.js"></script>
+    <script src="components.js"></script>
+    <script src="user.js"></script>
+</body>
+</html>
