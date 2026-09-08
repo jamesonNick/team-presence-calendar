@@ -9,11 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnBulk) btnBulk.onclick = showBulkEditorModal;
 });
 
-// Helper function para kumuha lang ng ACTIVE employees
-function getActiveEmployees() {
-    return (state.employees || []).filter(e => e.active !== false);
-}
-
 // Overriding Cell Generation for Admin Interaction & Action Buttons
 const originalRenderGrid = renderGrid;
 renderGrid = function() {
@@ -38,15 +33,10 @@ renderGrid = function() {
         };
     });
 
-    // Clickable Interactive Cells FIX:
-    // Hanapin ang tamang employee gamit ang button ID ng row sa halip na array index!
+    // Clickable Interactive Cells
     const rows = document.querySelectorAll('#calendar-body tr');
-    rows.forEach((tr) => {
-        const editBtn = tr.querySelector('.btn-edit-emp');
-        if (!editBtn) return;
-
-        const empId = editBtn.getAttribute('data-id');
-        const emp = state.employees.find(e => e.id === empId);
+    rows.forEach((tr, index) => {
+        const emp = state.employees[index];
         if (!emp) return;
 
         const cells = tr.querySelectorAll('td.schedule-cell');
@@ -64,13 +54,19 @@ renderGrid = function() {
 };
 
 function getTeamOptionsHTML(selectedTeam = '') {
-    const activeEmps = getActiveEmployees();
-    const teamsSet = new Set(PREDEFINED_TEAMS.concat(activeEmps.map(e => e.team)));
+    const teamsSet = new Set(PREDEFINED_TEAMS.concat(state.employees.map(e => e.team)));
     return Array.from(teamsSet).map(t => `<option value="${t}" ${t === selectedTeam ? 'selected' : ''}>${t}</option>`).join('');
 }
 
 function showInlineCellEditor(emp, dateStr, currentVal) {
     const root = document.getElementById('admin-modal-root');
+    
+    // Support CLEAR / BLANK option
+    const optionsHTML = `
+        <option value="" ${currentVal === '' ? 'selected' : ''}>-- BLANK / CLEAR SCHEDULE --</option>
+        ${SCHEDULE_TYPES.map(t => `<option value="${t}" ${t === currentVal ? 'selected' : ''}>${t}</option>`).join('')}
+    `;
+
     root.innerHTML = `
         <div class="modal-overlay">
             <div class="modal-card">
@@ -81,7 +77,7 @@ function showInlineCellEditor(emp, dateStr, currentVal) {
                     <div class="form-group">
                         <label>Schedule Type</label>
                         <select id="cell-type-select">
-                            ${SCHEDULE_TYPES.map(t => `<option value="${t}" ${t === currentVal ? 'selected' : ''}>${t}</option>`).join('')}
+                            ${optionsHTML}
                         </select>
                     </div>
                 </div>
@@ -95,18 +91,29 @@ function showInlineCellEditor(emp, dateStr, currentVal) {
 
     document.getElementById('btn-save-cell').onclick = async () => {
         const selectedType = document.getElementById('cell-type-select').value;
+        const actionText = selectedType === '' ? 'Clear schedule entry' : `Change schedule to "${selectedType}"`;
+
         Modal.confirm({
             title: 'Confirm Schedule Change',
-            message: `Change ${emp.employee_name}'s schedule on ${dateStr} from "${currentVal}" to "${selectedType}"?`,
+            message: `${actionText} for ${emp.employee_name} on ${dateStr}?`,
             onConfirm: async () => {
-                const { error } = await supabaseClient.from('schedules').upsert({
-                    employee_id: emp.id,
-                    schedule_date: dateStr,
-                    schedule_type: selectedType
-                }, { onConflict: 'employee_id,schedule_date' });
+                let res;
+                if (selectedType === '') {
+                    res = await supabaseClient
+                        .from('schedules')
+                        .delete()
+                        .eq('employee_id', emp.id)
+                        .eq('schedule_date', dateStr);
+                } else {
+                    res = await supabaseClient.from('schedules').upsert({
+                        employee_id: emp.id,
+                        schedule_date: dateStr,
+                        schedule_type: selectedType
+                    }, { onConflict: 'employee_id,schedule_date' });
+                }
 
-                if (error) {
-                    Toast.error('Save failed: ' + error.message);
+                if (res.error) {
+                    Toast.error('Save failed: ' + res.error.message);
                 } else {
                     Toast.success('Schedule successfully updated.');
                     root.innerHTML = '';
@@ -149,7 +156,13 @@ function showAddEmployeeModal() {
 
         if (!name || !team) return Toast.warning('Name and Team are required.');
 
-        const { error } = await supabaseClient.from('employees').insert({ employee_name: name, team: team, active: true });
+        // Client-side check to prevent adding duplicates
+        const exists = state.employees.some(e => e.employee_name.toLowerCase() === name.toLowerCase());
+        if (exists) {
+            return Toast.warning(`Employee "${name}" already exists.`);
+        }
+
+        const { error } = await supabaseClient.from('employees').insert({ employee_name: name, team: team });
         if (error) {
             Toast.error('Insert failed: ' + error.message);
         } else {
@@ -190,6 +203,14 @@ function showEditEmployeeModal(emp) {
     document.getElementById('btn-update-emp').onclick = async () => {
         const name = document.getElementById('edit-emp-name').value.trim();
         const team = document.getElementById('edit-emp-team').value;
+
+        if (!name || !team) return Toast.warning('Name and Team are required.');
+
+        // Client-side check for duplicate name when updating to another existing name
+        const duplicate = state.employees.some(e => e.id !== emp.id && e.employee_name.toLowerCase() === name.toLowerCase());
+        if (duplicate) {
+            return Toast.warning(`Another employee with name "${name}" already exists.`);
+        }
 
         Modal.confirm({
             title: 'Confirm Update',
@@ -275,7 +296,6 @@ function showAddHolidayModal() {
 }
 
 function showBulkEditorModal() {
-    const activeEmps = getActiveEmployees();
     const root = document.getElementById('admin-modal-root');
     root.innerHTML = `
         <div class="modal-overlay">
@@ -299,12 +319,13 @@ function showBulkEditorModal() {
                         <label>Target Employee</label>
                         <select id="bulk-emp-select">
                             <option value="ALL">ALL EMPLOYEES</option>
-                            ${activeEmps.map(e => `<option value="${e.id}">${e.employee_name}</option>`).join('')}
+                            ${state.employees.map(e => `<option value="${e.id}">${e.employee_name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Schedule Type</label>
                         <select id="bulk-type">
+                            <option value="">-- BLANK / CLEAR SCHEDULE --</option>
                             ${SCHEDULE_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
                         </select>
                     </div>
@@ -368,22 +389,38 @@ function showBulkEditorModal() {
             return Toast.warning('No valid dates selected matching criteria.');
         }
 
-        const targetEmps = empId === 'ALL' ? activeEmps : activeEmps.filter(e => e.id === empId);
+        const targetEmps = empId === 'ALL' ? state.employees : state.employees.filter(e => e.id === empId);
         const totalRecords = targetEmps.length * dates.length;
+        const actionDesc = schedType === '' ? 'CLEAR / ERASE' : `set to "${schedType}"`;
 
         Modal.confirm({
             title: 'Confirm Bulk Assignment',
-            message: `You are about to update ${totalRecords} schedule records to "${schedType}" (${excludeWeekends ? 'excluding weekends' : 'including weekends'}). Apply changes?`,
+            message: `You are about to ${actionDesc} ${totalRecords} schedule records (${excludeWeekends ? 'excluding weekends' : 'including weekends'}). Apply changes?`,
             onConfirm: async () => {
-                const payload = [];
-                targetEmps.forEach(e => {
-                    dates.forEach(d => {
-                        payload.push({ employee_id: e.id, schedule_date: d, schedule_type: schedType });
-                    });
-                });
+                let errorOccurred = false;
 
-                const { error } = await supabaseClient.from('schedules').upsert(payload, { onConflict: 'employee_id,schedule_date' });
-                if (error) Toast.error('Bulk update failed: ' + error.message);
+                if (schedType === '') {
+                    const empIds = targetEmps.map(e => e.id);
+                    const { error } = await supabaseClient
+                        .from('schedules')
+                        .delete()
+                        .in('employee_id', empIds)
+                        .in('schedule_date', dates);
+                    
+                    if (error) errorOccurred = error.message;
+                } else {
+                    const payload = [];
+                    targetEmps.forEach(e => {
+                        dates.forEach(d => {
+                            payload.push({ employee_id: e.id, schedule_date: d, schedule_type: schedType });
+                        });
+                    });
+
+                    const { error } = await supabaseClient.from('schedules').upsert(payload, { onConflict: 'employee_id,schedule_date' });
+                    if (error) errorOccurred = error.message;
+                }
+
+                if (errorOccurred) Toast.error('Bulk update failed: ' + errorOccurred);
                 else {
                     Toast.success('Schedule successfully updated.');
                     root.innerHTML = '';
