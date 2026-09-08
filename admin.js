@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnBulk) btnBulk.onclick = showBulkEditorModal;
 });
 
+// Helper function para kumuha lang ng ACTIVE employees
+function getActiveEmployees() {
+    return (state.employees || []).filter(e => e.active !== false);
+}
+
 // Overriding Cell Generation for Admin Interaction & Action Buttons
 const originalRenderGrid = renderGrid;
 renderGrid = function() {
@@ -33,10 +38,11 @@ renderGrid = function() {
         };
     });
 
-    // Clickable Interactive Cells
+    // Clickable Interactive Cells (Gamitin ang Active Employees lamang)
+    const activeEmps = getActiveEmployees();
     const rows = document.querySelectorAll('#calendar-body tr');
     rows.forEach((tr, index) => {
-        const emp = state.employees[index];
+        const emp = activeEmps[index];
         if (!emp) return;
 
         const cells = tr.querySelectorAll('td.schedule-cell');
@@ -54,7 +60,8 @@ renderGrid = function() {
 };
 
 function getTeamOptionsHTML(selectedTeam = '') {
-    const teamsSet = new Set(PREDEFINED_TEAMS.concat(state.employees.map(e => e.team)));
+    const activeEmps = getActiveEmployees();
+    const teamsSet = new Set(PREDEFINED_TEAMS.concat(activeEmps.map(e => e.team)));
     return Array.from(teamsSet).map(t => `<option value="${t}" ${t === selectedTeam ? 'selected' : ''}>${t}</option>`).join('');
 }
 
@@ -138,7 +145,7 @@ function showAddEmployeeModal() {
 
         if (!name || !team) return Toast.warning('Name and Team are required.');
 
-        const { error } = await supabaseClient.from('employees').insert({ employee_name: name, team: team });
+        const { error } = await supabaseClient.from('employees').insert({ employee_name: name, team: team, active: true });
         if (error) {
             Toast.error('Insert failed: ' + error.message);
         } else {
@@ -264,6 +271,7 @@ function showAddHolidayModal() {
 }
 
 function showBulkEditorModal() {
+    const activeEmps = getActiveEmployees();
     const root = document.getElementById('admin-modal-root');
     root.innerHTML = `
         <div class="modal-overlay">
@@ -287,7 +295,7 @@ function showBulkEditorModal() {
                         <label>Target Employee</label>
                         <select id="bulk-emp-select">
                             <option value="ALL">ALL EMPLOYEES</option>
-                            ${state.employees.map(e => `<option value="${e.id}">${e.employee_name}</option>`).join('')}
+                            ${activeEmps.map(e => `<option value="${e.id}">${e.employee_name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -332,7 +340,7 @@ function showBulkEditorModal() {
                 const dateObj = new Date(Date.UTC(year, month, d));
                 const dayOfWeek = dateObj.getUTCDay();
                 if (excludeWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
-                    continue; // Skip Sat (6) and Sun (0)
+                    continue;
                 }
                 dates.push(dateObj.toISOString().split('T')[0]);
             }
@@ -356,7 +364,7 @@ function showBulkEditorModal() {
             return Toast.warning('No valid dates selected matching criteria.');
         }
 
-        const targetEmps = empId === 'ALL' ? state.employees : state.employees.filter(e => e.id === empId);
+        const targetEmps = empId === 'ALL' ? activeEmps : activeEmps.filter(e => e.id === empId);
         const totalRecords = targetEmps.length * dates.length;
 
         Modal.confirm({
