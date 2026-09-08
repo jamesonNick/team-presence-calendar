@@ -38,11 +38,15 @@ renderGrid = function() {
         };
     });
 
-    // Clickable Interactive Cells (Gamitin ang Active Employees lamang)
-    const activeEmps = getActiveEmployees();
+    // Clickable Interactive Cells FIX:
+    // Hanapin ang tamang employee gamit ang button ID ng row sa halip na array index!
     const rows = document.querySelectorAll('#calendar-body tr');
-    rows.forEach((tr, index) => {
-        const emp = activeEmps[index];
+    rows.forEach((tr) => {
+        const editBtn = tr.querySelector('.btn-edit-emp');
+        if (!editBtn) return;
+
+        const empId = editBtn.getAttribute('data-id');
+        const emp = state.employees.find(e => e.id === empId);
         if (!emp) return;
 
         const cells = tr.querySelectorAll('td.schedule-cell');
