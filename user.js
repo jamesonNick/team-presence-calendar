@@ -168,7 +168,9 @@ function calculateKPIs() {
     const valTotal = document.getElementById('val-total');
     if (valTotal) valTotal.innerText = state.employees.length;
     
-    const todayScheds = state.schedules.filter(s => s.schedule_date === todayStr);
+    // BINAGO DITO: Kumuha ng listahan ng Active Employee IDs para siguradong active employees lang ang mabibilang sa KPI
+    const activeEmpIds = new Set(state.employees.map(e => e.id));
+    const todayScheds = state.schedules.filter(s => s.schedule_date === todayStr && activeEmpIds.has(s.employee_id));
     
     const valWfh = document.getElementById('val-wfh');
     if (valWfh) valWfh.innerText = todayScheds.filter(s => s.schedule_type === 'WFH').length;
@@ -313,6 +315,8 @@ function showKPIModal(type) {
     let title = '';
     let contentHtml = '';
 
+    const activeEmpIds = new Set(state.employees.map(e => e.id));
+
     if (type === 'TOTAL') {
         title = 'All Active Employees';
         contentHtml = state.employees.map(e => `<div><strong>${e.employee_name}</strong> - ${e.team}</div>`).join('');
@@ -321,8 +325,9 @@ function showKPIModal(type) {
         contentHtml = state.holidays.map(h => `<div><strong>${h.holiday_date}</strong>: ${h.holiday_name}</div>`).join('') || 'No holidays this month.';
     } else {
         title = `${type} List (Today: ${todayStr})`;
+        // BINAGO DITO: Isinama ang `activeEmpIds.has(s.employee_id)` para sa KPI Modal popup
         const filteredScheds = state.schedules.filter(s => {
-            if (s.schedule_date !== todayStr) return false;
+            if (s.schedule_date !== todayStr || !activeEmpIds.has(s.employee_id)) return false;
             if (type === 'LEAVE') return LEAVE_TYPES.includes(s.schedule_type);
             return s.schedule_type === type;
         });
