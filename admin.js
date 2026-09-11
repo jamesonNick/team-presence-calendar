@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+    initAdminEvents();
+});
+
+function initAdminEvents() {
     const btnAddEmp = document.getElementById('btn-add-emp');
     if (btnAddEmp) btnAddEmp.onclick = showAddEmployeeModal;
 
@@ -7,64 +11,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnBulk = document.getElementById('btn-bulk-edit');
     if (btnBulk) btnBulk.onclick = showBulkEditorModal;
-});
 
-// Overriding Cell Generation for Admin Interaction & Action Buttons
-const originalRenderGrid = renderGrid;
-renderGrid = function() {
-    originalRenderGrid();
-    
-    // Action Buttons Event Binding per Row
-    document.querySelectorAll('.btn-edit-emp').forEach(btn => {
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            const empId = btn.getAttribute('data-id');
-            const emp = state.employees.find(e => e.id === empId);
-            if (emp) showEditEmployeeModal(emp);
-        };
-    });
+    const calendarBody = document.getElementById('calendar-body');
+    if (calendarBody) {
+        calendarBody.addEventListener('click', handleTableClick);
+    }
+}
 
-    document.querySelectorAll('.btn-del-emp').forEach(btn => {
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            const empId = btn.getAttribute('data-id');
-            const emp = state.employees.find(e => e.id === empId);
-            if (emp) showDeactivateEmployeePrompt(emp);
-        };
-    });
+// Global Event Handler for Dynamic Rows & Cells
+function handleTableClick(e) {
+    const target = e.target;
 
-    // Clickable Interactive Cells
-    const rows = document.querySelectorAll('#calendar-body tr');
-    rows.forEach((tr, index) => {
-        const emp = state.employees[index];
-        if (!emp) return;
+    // Edit Employee Button
+    if (target.classList.contains('btn-edit-emp')) {
+        e.stopPropagation();
+        const empId = target.getAttribute('data-id');
+        const emp = state.employees.find(item => item.id === empId);
+        if (emp) showEditEmployeeModal(emp);
+        return;
+    }
 
-        const cells = tr.querySelectorAll('td.schedule-cell');
-        const year = state.currentDate.getFullYear();
-        const month = state.currentDate.getMonth();
+    // Deactivate Employee Button
+    if (target.classList.contains('btn-del-emp')) {
+        e.stopPropagation();
+        const empId = target.getAttribute('data-id');
+        const emp = state.employees.find(item => item.id === empId);
+        if (emp) showDeactivateEmployeePrompt(emp);
+        return;
+    }
 
-        cells.forEach((td, dayIdx) => {
-            td.onclick = () => {
+    // Clickable Cell Schedule Editor
+    const cell = target.closest('td.schedule-cell');
+    if (cell) {
+        const tr = cell.parentElement;
+        const rowIndex = Array.from(tr.parentElement.children).indexOf(tr);
+        const emp = state.employees[rowIndex];
+        
+        if (emp) {
+            const dayIdx = Array.from(tr.children).indexOf(cell) - (window.location.pathname.includes('admin.html') ? 3 : 2);
+            if (dayIdx >= 0) {
+                const year = state.currentDate.getFullYear();
+                const month = state.currentDate.getMonth();
                 const dateObj = new Date(Date.UTC(year, month, dayIdx + 1));
                 const dateStr = dateObj.toISOString().split('T')[0];
-                showInlineCellEditor(emp, dateStr, td.innerText);
-            };
-        });
-    });
-};
+                showInlineCellEditor(emp, dateStr, cell.innerText.trim());
+            }
+        }
+    }
+}
 
 function getTeamOptionsHTML(selectedTeam = '') {
-    const teamsSet = new Set(PREDEFINED_TEAMS.concat(state.employees.map(e => e.team)));
+    const teamsSet = new Set(window.PREDEFINED_TEAMS.concat(state.employees.map(e => e.team)));
     return Array.from(teamsSet).map(t => `<option value="${t}" ${t === selectedTeam ? 'selected' : ''}>${t}</option>`).join('');
 }
 
+// Cell Schedule Inline Editor
 function showInlineCellEditor(emp, dateStr, currentVal) {
     const root = document.getElementById('admin-modal-root');
     
-    // Support CLEAR / BLANK option
     const optionsHTML = `
         <option value="" ${currentVal === '' ? 'selected' : ''}>-- BLANK / CLEAR SCHEDULE --</option>
-        ${SCHEDULE_TYPES.map(t => `<option value="${t}" ${t === currentVal ? 'selected' : ''}>${t}</option>`).join('')}
+        ${window.SCHEDULE_TYPES.map(t => `<option value="${t}" ${t === currentVal ? 'selected' : ''}>${t}</option>`).join('')}
     `;
 
     root.innerHTML = `
@@ -91,39 +98,29 @@ function showInlineCellEditor(emp, dateStr, currentVal) {
 
     document.getElementById('btn-save-cell').onclick = async () => {
         const selectedType = document.getElementById('cell-type-select').value;
-        const actionText = selectedType === '' ? 'Clear schedule entry' : `Change schedule to "${selectedType}"`;
 
-        Modal.confirm({
-            title: 'Confirm Schedule Change',
-            message: `${actionText} for ${emp.employee_name} on ${dateStr}?`,
-            onConfirm: async () => {
-                let res;
-                if (selectedType === '') {
-                    res = await supabaseClient
-                        .from('schedules')
-                        .delete()
-                        .eq('employee_id', emp.id)
-                        .eq('schedule_date', dateStr);
-                } else {
-                    res = await supabaseClient.from('schedules').upsert({
-                        employee_id: emp.id,
-                        schedule_date: dateStr,
-                        schedule_type: selectedType
-                    }, { onConflict: 'employee_id,schedule_date' });
-                }
+        let res;
+        if (selectedType === '') {
+            res = await window.supabaseClient.from('schedules').delete().eq('employee_id', emp.id).eq('schedule_date', dateStr);
+        } else {
+            res = await window.supabaseClient.from('schedules').upsert({
+                employee_id: emp.id,
+                schedule_date: dateStr,
+                schedule_type: selectedType
+            }, { onConflict: 'employee_id,schedule_date' });
+        }
 
-                if (res.error) {
-                    Toast.error('Save failed: ' + res.error.message);
-                } else {
-                    Toast.success('Schedule successfully updated.');
-                    root.innerHTML = '';
-                    await loadCalendarData();
-                }
-            }
-        });
+        if (res.error) {
+            Toast.error('Save failed: ' + res.error.message);
+        } else {
+            Toast.success('Schedule successfully updated.');
+            root.innerHTML = '';
+            await loadCalendarData();
+        }
     };
 }
 
+// Add New Employee Modal
 function showAddEmployeeModal() {
     const root = document.getElementById('admin-modal-root');
     root.innerHTML = `
@@ -156,13 +153,10 @@ function showAddEmployeeModal() {
 
         if (!name || !team) return Toast.warning('Name and Team are required.');
 
-        // Client-side check to prevent adding duplicates
         const exists = state.employees.some(e => e.employee_name.toLowerCase() === name.toLowerCase());
-        if (exists) {
-            return Toast.warning(`Employee "${name}" already exists.`);
-        }
+        if (exists) return Toast.warning(`Employee "${name}" already exists.`);
 
-        const { error } = await supabaseClient.from('employees').insert({ employee_name: name, team: team });
+        const { error } = await window.supabaseClient.from('employees').insert({ employee_name: name, team: team });
         if (error) {
             Toast.error('Insert failed: ' + error.message);
         } else {
@@ -173,6 +167,7 @@ function showAddEmployeeModal() {
     };
 }
 
+// Edit Employee Details
 function showEditEmployeeModal(emp) {
     const root = document.getElementById('admin-modal-root');
     root.innerHTML = `
@@ -206,25 +201,14 @@ function showEditEmployeeModal(emp) {
 
         if (!name || !team) return Toast.warning('Name and Team are required.');
 
-        // Client-side check for duplicate name when updating to another existing name
-        const duplicate = state.employees.some(e => e.id !== emp.id && e.employee_name.toLowerCase() === name.toLowerCase());
-        if (duplicate) {
-            return Toast.warning(`Another employee with name "${name}" already exists.`);
+        const { error } = await window.supabaseClient.from('employees').update({ employee_name: name, team: team }).eq('id', emp.id);
+        if (error) {
+            Toast.error('Update failed: ' + error.message);
+        } else {
+            Toast.success('Employee successfully updated.');
+            root.innerHTML = '';
+            await loadCalendarData();
         }
-
-        Modal.confirm({
-            title: 'Confirm Update',
-            message: `Update details for ${emp.employee_name}?`,
-            onConfirm: async () => {
-                const { error } = await supabaseClient.from('employees').update({ employee_name: name, team: team }).eq('id', emp.id);
-                if (error) Toast.error('Update failed: ' + error.message);
-                else {
-                    Toast.success('Employee successfully updated.');
-                    root.innerHTML = '';
-                    await loadCalendarData();
-                }
-            }
-        });
     };
 
     document.getElementById('btn-deactivate-emp').onclick = () => {
@@ -232,46 +216,125 @@ function showEditEmployeeModal(emp) {
     };
 }
 
+// Deactivate Employee
 function showDeactivateEmployeePrompt(emp) {
-    const root = document.getElementById('admin-modal-root');
-    Modal.confirm({
-        title: 'Confirm Deactivation',
-        message: `Are you sure you want to deactivate ${emp.employee_name}? Historical schedule data will be retained.`,
-        onConfirm: async () => {
-            const { error } = await supabaseClient.from('employees').update({ active: false }).eq('id', emp.id);
-            if (error) Toast.error('Deactivation failed: ' + error.message);
-            else {
+    if (confirm(`Are you sure you want to deactivate ${emp.employee_name}?`)) {
+        (async () => {
+            const { error } = await window.supabaseClient.from('employees').update({ active: false }).eq('id', emp.id);
+            if (error) {
+                Toast.error('Deactivation failed: ' + error.message);
+            } else {
                 Toast.success('Employee successfully deactivated.');
-                root.innerHTML = '';
+                document.getElementById('admin-modal-root').innerHTML = '';
                 await loadCalendarData();
             }
-        }
-    });
+        })();
+    }
 }
 
+// Manage Holidays Modal
 function showAddHolidayModal() {
     const root = document.getElementById('admin-modal-root');
+    
+    const existingHolidaysHTML = state.holidays.length > 0 
+        ? state.holidays.map(h => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0;">
+                <span><strong>${h.holiday_date}</strong> - ${h.holiday_name}</span>
+                <button class="btn btn-danger btn-del-holiday-now" data-date="${h.holiday_date}" style="padding:4px 8px; font-size:12px;">Delete</button>
+            </div>
+        `).join('')
+        : '<p style="color:#888; font-size:13px;">No official holidays set for this view.</p>';
+
     root.innerHTML = `
         <div class="modal-overlay">
-            <div class="modal-card">
-                <div class="modal-header"><h3>Add Official Holiday</h3></div>
+            <div class="modal-card" style="max-width: 480px;">
+                <div class="modal-header"><h3>Manage Official Holidays (PH)</h3></div>
                 <div class="modal-body">
                     <div class="form-group">
+                        <label>Quick Select PH Holiday</label>
+                        <select id="ph-holiday-select">
+                            <option value="">-- Choose PH Holiday --</option>
+                            <option value='{"name": "New Year&#39;s Day", "date": "2026-01-01"}'>New Year's Day (Jan 1)</option>
+                            <option value='{"name": "Chinese New Year", "date": "2026-02-17"}'>Chinese New Year (Feb 17)</option>
+                            <option value='{"name": "EDSA People Power Revolution", "date": "2026-02-25"}'>EDSA People Power (Feb 25)</option>
+                            <option value='{"name": "Maundy Thursday", "date": "2026-04-02"}'>Maundy Thursday (Apr 2)</option>
+                            <option value='{"name": "Good Friday", "date": "2026-04-03"}'>Good Friday (Apr 3)</option>
+                            <option value='{"name": "Black Saturday", "date": "2026-04-04"}'>Black Saturday (Apr 4)</option>
+                            <option value='{"name": "Araw ng Kagitingan", "date": "2026-04-09"}'>Araw ng Kagitingan (Apr 9)</option>
+                            <option value='{"name": "Labor Day", "date": "2026-05-01"}'>Labor Day (May 1)</option>
+                            <option value='{"name": "Independence Day", "date": "2026-06-12"}'>Independence Day (Jun 12)</option>
+                            <option value='{"name": "Ninoy Aquino Day", "date": "2026-08-21"}'>Ninoy Aquino Day (Aug 21)</option>
+                            <option value='{"name": "National Heroes Day", "date": "2026-08-31"}'>National Heroes Day (Aug 31)</option>
+                            <option value='{"name": "All Saints&#39; Day", "date": "2026-11-01"}'>All Saints' Day (Nov 1)</option>
+                            <option value='{"name": "All Souls&#39; Day", "date": "2026-11-02"}'>All Souls' Day (Nov 2)</option>
+                            <option value='{"name": "Bonifacio Day", "date": "2026-11-30"}'>Bonifacio Day (Nov 30)</option>
+                            <option value='{"name": "Feast of the Immaculate Conception", "date": "2026-12-08"}'>Feast of the Immaculate Conception (Dec 8)</option>
+                            <option value='{"name": "Christmas Eve", "date": "2026-12-24"}'>Christmas Eve (Dec 24)</option>
+                            <option value='{"name": "Christmas Day", "date": "2026-12-25"}'>Christmas Day (Dec 25)</option>
+                            <option value='{"name": "Rizal Day", "date": "2026-12-30"}'>Rizal Day (Dec 30)</option>
+                            <option value='{"name": "Last Day of the Year", "date": "2026-12-31"}'>Last Day of the Year (Dec 31)</option>
+                            <option value="custom">-- Custom / Uncaptured Holiday --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>Holiday Name</label>
-                        <input type="text" id="hol-name" placeholder="e.g. Independence Day">
+                        <input type="text" id="hol-name" placeholder="e.g. Special Non-Working Day">
                     </div>
                     <div class="form-group">
                         <label>Date</label>
                         <input type="date" id="hol-date">
                     </div>
+                    <hr style="border:0; border-top:1px solid #e2e8f0; margin:15px 0;">
+                    <div class="form-group">
+                        <label>Existing Holidays in System</label>
+                        <div style="max-height: 140px; overflow-y: auto; background:#fafafa; border:1px solid #eee; padding:8px; border-radius:4px;">
+                            ${existingHolidaysHTML}
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn btn-secondary" onclick="document.getElementById('admin-modal-root').innerHTML=''">Cancel</button>
-                    <button class="btn btn-primary" id="btn-save-hol">Add Holiday</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('admin-modal-root').innerHTML=''">Close</button>
+                    <button class="btn btn-primary" id="btn-save-hol">Save Holiday</button>
                 </div>
             </div>
         </div>
     `;
+
+    const dropdown = document.getElementById('ph-holiday-select');
+    dropdown.onchange = () => {
+        const val = dropdown.value;
+        if (val && val !== 'custom') {
+            const parsed = JSON.parse(val);
+            document.getElementById('hol-name').value = parsed.name;
+            document.getElementById('hol-date').value = parsed.date;
+        } else if (val === 'custom') {
+            document.getElementById('hol-name').value = '';
+            document.getElementById('hol-date').value = '';
+        }
+    };
+
+    // Direct Instant Delete Listener
+    document.querySelectorAll('.btn-del-holiday-now').forEach(btn => {
+        btn.onclick = async (e) => {
+            e.preventDefault();
+            const dateStr = btn.getAttribute('data-date');
+
+            btn.disabled = true;
+            btn.innerText = 'Deleting...';
+
+            const { error } = await window.supabaseClient.from('holidays').delete().eq('holiday_date', dateStr);
+
+            if (error) {
+                Toast.error('Delete failed: ' + error.message);
+                btn.disabled = false;
+                btn.innerText = 'Delete';
+            } else {
+                Toast.success('Holiday deleted successfully!');
+                root.innerHTML = '';
+                await loadCalendarData();
+            }
+        };
+    });
 
     document.getElementById('btn-save-hol').onclick = async () => {
         const name = document.getElementById('hol-name').value.trim();
@@ -279,22 +342,17 @@ function showAddHolidayModal() {
 
         if (!name || !date) return Toast.warning('Name and Date are required.');
 
-        Modal.confirm({
-            title: 'Confirm Holiday',
-            message: `Add ${name} on ${date}?`,
-            onConfirm: async () => {
-                const { error } = await supabaseClient.from('holidays').insert({ holiday_date: date, holiday_name: name });
-                if (error) Toast.error('Failed to add holiday: ' + error.message);
-                else {
-                    Toast.success('Holiday successfully added.');
-                    root.innerHTML = '';
-                    await loadCalendarData();
-                }
-            }
-        });
+        const { error } = await window.supabaseClient.from('holidays').upsert({ holiday_date: date, holiday_name: name }, { onConflict: 'holiday_date' });
+        if (error) Toast.error('Failed to save holiday: ' + error.message);
+        else {
+            Toast.success('Holiday successfully saved.');
+            root.innerHTML = '';
+            await loadCalendarData();
+        }
     };
 }
 
+// Bulk Editor Modal
 function showBulkEditorModal() {
     const root = document.getElementById('admin-modal-root');
     root.innerHTML = `
@@ -326,7 +384,7 @@ function showBulkEditorModal() {
                         <label>Schedule Type</label>
                         <select id="bulk-type">
                             <option value="">-- BLANK / CLEAR SCHEDULE --</option>
-                            ${SCHEDULE_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
+                            ${window.SCHEDULE_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -349,7 +407,7 @@ function showBulkEditorModal() {
         document.getElementById('bulk-range-inputs').style.display = scopeSelect.value === 'RANGE' ? 'flex' : 'none';
     };
 
-    document.getElementById('btn-preview-bulk').onclick = () => {
+    document.getElementById('btn-preview-bulk').onclick = async () => {
         const scope = scopeSelect.value;
         const empId = document.getElementById('bulk-emp-select').value;
         const schedType = document.getElementById('bulk-type').value;
@@ -364,9 +422,7 @@ function showBulkEditorModal() {
             for (let d = 1; d <= totalDays; d++) {
                 const dateObj = new Date(Date.UTC(year, month, d));
                 const dayOfWeek = dateObj.getUTCDay();
-                if (excludeWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
-                    continue;
-                }
+                if (excludeWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) continue;
                 dates.push(dateObj.toISOString().split('T')[0]);
             }
         } else {
@@ -385,48 +441,33 @@ function showBulkEditorModal() {
             }
         }
 
-        if (dates.length === 0) {
-            return Toast.warning('No valid dates selected matching criteria.');
-        }
+        if (dates.length === 0) return Toast.warning('No valid dates selected matching criteria.');
 
         const targetEmps = empId === 'ALL' ? state.employees : state.employees.filter(e => e.id === empId);
-        const totalRecords = targetEmps.length * dates.length;
-        const actionDesc = schedType === '' ? 'CLEAR / ERASE' : `set to "${schedType}"`;
 
-        Modal.confirm({
-            title: 'Confirm Bulk Assignment',
-            message: `You are about to ${actionDesc} ${totalRecords} schedule records (${excludeWeekends ? 'excluding weekends' : 'including weekends'}). Apply changes?`,
-            onConfirm: async () => {
-                let errorOccurred = false;
+        let errorOccurred = false;
+        if (schedType === '') {
+            const empIds = targetEmps.map(e => e.id);
+            const { error } = await window.supabaseClient.from('schedules').delete().in('employee_id', empIds).in('schedule_date', dates);
+            if (error) errorOccurred = error.message;
+        } else {
+            const payload = [];
+            targetEmps.forEach(e => {
+                dates.forEach(d => {
+                    payload.push({ employee_id: e.id, schedule_date: d, schedule_type: schedType });
+                });
+            });
 
-                if (schedType === '') {
-                    const empIds = targetEmps.map(e => e.id);
-                    const { error } = await supabaseClient
-                        .from('schedules')
-                        .delete()
-                        .in('employee_id', empIds)
-                        .in('schedule_date', dates);
-                    
-                    if (error) errorOccurred = error.message;
-                } else {
-                    const payload = [];
-                    targetEmps.forEach(e => {
-                        dates.forEach(d => {
-                            payload.push({ employee_id: e.id, schedule_date: d, schedule_type: schedType });
-                        });
-                    });
+            const { error } = await window.supabaseClient.from('schedules').upsert(payload, { onConflict: 'employee_id,schedule_date' });
+            if (error) errorOccurred = error.message;
+        }
 
-                    const { error } = await supabaseClient.from('schedules').upsert(payload, { onConflict: 'employee_id,schedule_date' });
-                    if (error) errorOccurred = error.message;
-                }
-
-                if (errorOccurred) Toast.error('Bulk update failed: ' + errorOccurred);
-                else {
-                    Toast.success('Schedule successfully updated.');
-                    root.innerHTML = '';
-                    await loadCalendarData();
-                }
-            }
-        });
+        if (errorOccurred) {
+            Toast.error('Bulk update failed: ' + errorOccurred);
+        } else {
+            Toast.success('Schedule successfully updated.');
+            root.innerHTML = '';
+            await loadCalendarData();
+        }
     };
 }
