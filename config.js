@@ -6,15 +6,5 @@ if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE
     console.warn('Supabase credentials missing. Update config.js with valid project URL and anon key.');
 }
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const SCHEDULE_TYPES = ['WFH', 'WFO', 'HOLIDAY', 'VL', 'SL', 'VL AM', 'VL PM', 'SL AM', 'SL PM'];
-const LEAVE_TYPES = ['VL', 'SL', 'VL AM', 'VL PM', 'SL AM', 'SL PM'];
-
-// Added Predefined Teams list for dropdown selection
-const PREDEFINED_TEAMS = [
-    'EAST ASIA', 
-    'WEST ASIA', 
-    'JP + BB + IFF + OC'
-    
-];
+// Global Supabase Client
+window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
