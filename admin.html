@@ -10,10 +10,10 @@
 </head>
 <body>
     <div class="app-header">
-        <div class="app-title">Intra Asia Calendar </div>
+        <div class="app-title">Intra Asia Calendar</div>
         <div>
             <button class="btn btn-primary" id="btn-add-emp">+ Add Employee</button>
-            <button class="btn btn-primary" id="btn-add-holiday">+ Add Holiday</button>
+            <button class="btn btn-primary" id="btn-add-holiday" onclick="openHolidayModal()">+ Add Holiday</button>
             <button class="btn btn-primary" id="btn-bulk-edit">Bulk Schedule Editor</button>
             <a href="index.html" target="_blank" rel="noopener noreferrer" class="nav-link" style="margin-left:12px;">← Employee View ↗</a>
         </div>
@@ -47,6 +47,63 @@
             <thead><tr id="calendar-header"></tr></thead>
             <tbody id="calendar-body"></tbody>
         </table>
+    </div>
+
+    <!-- Philippine Holiday Management Modal -->
+    <div id="holiday-modal" class="modal" style="display:none; position:fixed; z-index:999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
+        <div class="modal-content" style="background:#fff; margin:5% auto; padding:20px; border-radius:8px; width:450px; position:relative;">
+            <span onclick="closeHolidayModal()" style="position:absolute; right:15px; top:10px; cursor:pointer; font-size:20px; font-weight:bold;">&times;</span>
+            <h3 style="margin-top:0;">Manage Holidays (PH)</h3>
+
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:600;">Quick Select PH Holiday Template:</label>
+                <select id="ph-holiday-dropdown" onchange="handleHolidayDropdownChange()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                    <option value="">-- Choose PH Holiday --</option>
+                    <option value='{"name": "New Year&#39;s Day", "date": "2026-01-01"}'>New Year's Day (Jan 1)</option>
+                    <option value='{"name": "Chinese New Year", "date": "2026-02-17"}'>Chinese New Year (Feb 17)</option>
+                    <option value='{"name": "EDSA People Power Revolution", "date": "2026-02-25"}'>EDSA People Power (Feb 25)</option>
+                    <option value='{"name": "Maundy Thursday", "date": "2026-04-02"}'>Maundy Thursday (Apr 2)</option>
+                    <option value='{"name": "Good Friday", "date": "2026-04-03"}'>Good Friday (Apr 3)</option>
+                    <option value='{"name": "Black Saturday", "date": "2026-04-04"}'>Black Saturday (Apr 4)</option>
+                    <option value='{"name": "Araw ng Kagitingan", "date": "2026-04-09"}'>Araw ng Kagitingan (Apr 9)</option>
+                    <option value='{"name": "Labor Day", "date": "2026-05-01"}'>Labor Day (May 1)</option>
+                    <option value='{"name": "Independence Day", "date": "2026-06-12"}'>Independence Day (Jun 12)</option>
+                    <option value='{"name": "Ninoy Aquino Day", "date": "2026-08-21"}'>Ninoy Aquino Day (Aug 21)</option>
+                    <option value='{"name": "National Heroes Day", "date": "2026-08-31"}'>National Heroes Day (Aug 31)</option>
+                    <option value='{"name": "All Saints&#39; Day", "date": "2026-11-01"}'>All Saints' Day (Nov 1)</option>
+                    <option value='{"name": "All Souls&#39; Day", "date": "2026-11-02"}'>All Souls' Day (Nov 2)</option>
+                    <option value='{"name": "Bonifacio Day", "date": "2026-11-30"}'>Bonifacio Day (Nov 30)</option>
+                    <option value='{"name": "Feast of the Immaculate Conception", "date": "2026-12-08"}'>Feast of the Immaculate Conception (Dec 8)</option>
+                    <option value='{"name": "Christmas Eve", "date": "2026-12-24"}'>Christmas Eve (Dec 24)</option>
+                    <option value='{"name": "Christmas Day", "date": "2026-12-25"}'>Christmas Day (Dec 25)</option>
+                    <option value='{"name": "Rizal Day", "date": "2026-12-30"}'>Rizal Day (Dec 30)</option>
+                    <option value='{"name": "Last Day of the Year", "date": "2026-12-31"}'>Last Day of the Year (Dec 31)</option>
+                    <option value="custom">-- Custom / Uncaptured Holiday --</option>
+                </select>
+            </div>
+
+            <input type="hidden" id="holiday-id" />
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:600;">Holiday Name:</label>
+                <input type="text" id="holiday-name" placeholder="e.g. Special Local Holiday" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;" />
+            </div>
+
+            <div class="form-group" style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:4px; font-weight:600;">Holiday Date:</label>
+                <input type="date" id="holiday-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;" />
+            </div>
+
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <button id="btn-save-holiday" onclick="saveHoliday()" class="btn btn-primary" style="flex:1;">Save Holiday</button>
+                <button id="btn-cancel-holiday" onclick="resetHolidayForm()" class="btn" style="display:none; background:#6c757d; color:#fff;">Cancel Edit</button>
+            </div>
+
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;" />
+            <h4 style="margin:0 0 10px 0;">Existing Holidays</h4>
+            <div style="max-height:180px; overflow-y:auto;">
+                <ul id="holiday-list" style="list-style:none; padding:0; margin:0;"></ul>
+            </div>
+        </div>
     </div>
 
     <div id="admin-modal-root"></div>
