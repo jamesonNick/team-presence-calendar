@@ -164,23 +164,60 @@ async function loadCalendarData() {
 
 function calculateKPIs() {
     const todayStr = getLocalDateString();
-    
+    const currentHour = new Date().getHours();
+    const isAfternoon = currentHour >= 12; // true kapag 12:00 PM pataas na
+
     const valTotal = document.getElementById('val-total');
     if (valTotal) valTotal.innerText = state.employees.length;
-    
-    // BINAGO DITO: Kumuha ng listahan ng Active Employee IDs para siguradong active employees lang ang mabibilang sa KPI
+
     const activeEmpIds = new Set(state.employees.map(e => e.id));
     const todayScheds = state.schedules.filter(s => s.schedule_date === todayStr && activeEmpIds.has(s.employee_id));
-    
+
+    let countWfh = 0;
+    let countWfo = 0;
+    let countLeave = 0;
+
+    // Map today's schedule entries
+    const schedMap = new Map(todayScheds.map(s => [s.employee_id, s.schedule_type]));
+
+    state.employees.forEach(emp => {
+        const type = schedMap.get(emp.id) || 'WFO'; // Default WFO if unset
+
+        if (type === 'WFH') {
+            countWfh += 1;
+        } else if (type === 'SL AM' || type === 'VL AM') {
+            if (isAfternoon) {
+                // Hapon na: Pumasok na (Mawawala sa On Leave)
+                countWfo += 1;
+            } else {
+                // Umaga pa: Naka-Leave (.5)
+                countLeave += .5;
+            }
+        } else if (type === 'SL PM' || type === 'VL PM') {
+            if (isAfternoon) {
+                // Hapon na: Naka-Leave (.5)
+                countLeave += .5;
+            } else {
+                // Umaga pa: Pumasok muna
+                countWfo += 1;
+            }
+        } else if (['SL', 'VL', 'EL'].includes(type)) {
+            countLeave += 1;
+        } else {
+            // WFO or Default
+            countWfo += 1;
+        }
+    });
+
     const valWfh = document.getElementById('val-wfh');
-    if (valWfh) valWfh.innerText = todayScheds.filter(s => s.schedule_type === 'WFH').length;
-    
+    if (valWfh) valWfh.innerText = countWfh;
+
     const valWfo = document.getElementById('val-wfo');
-    if (valWfo) valWfo.innerText = todayScheds.filter(s => s.schedule_type === 'WFO').length;
-    
+    if (valWfo) valWfo.innerText = countWfo;
+
     const valLeave = document.getElementById('val-leave');
-    if (valLeave) valLeave.innerText = todayScheds.filter(s => LEAVE_TYPES.includes(s.schedule_type)).length;
-    
+    if (valLeave) valLeave.innerText = countLeave;
+
     const valHoliday = document.getElementById('val-holiday');
     if (valHoliday) valHoliday.innerText = state.holidays.length;
 }
@@ -297,7 +334,7 @@ function renderGrid() {
                 if (schedType === 'WFH') td.classList.add('schedule-wfh');
                 else if (schedType === 'WFO') td.classList.add('schedule-wfo');
                 else if (schedType === 'HOLIDAY') td.classList.add('schedule-holiday');
-                else if (['VL', 'SL'].includes(schedType)) td.classList.add('schedule-vl');
+                else if (['VL', 'SL', 'EL'].includes(schedType)) td.classList.add('schedule-vl');
                 else if (schedType.includes('AM') || schedType.includes('PM')) td.classList.add('schedule-half');
             }
 
@@ -312,6 +349,9 @@ function showKPIModal(type) {
     if (!root) return;
     
     const todayStr = getLocalDateString();
+    const currentHour = new Date().getHours();
+    const isAfternoon = currentHour >= 12;
+
     let title = '';
     let contentHtml = '';
 
@@ -325,18 +365,35 @@ function showKPIModal(type) {
         contentHtml = state.holidays.map(h => `<div><strong>${h.holiday_date}</strong>: ${h.holiday_name}</div>`).join('') || 'No holidays this month.';
     } else {
         title = `${type} List (Today: ${todayStr})`;
-        // BINAGO DITO: Isinama ang `activeEmpIds.has(s.employee_id)` para sa KPI Modal popup
-        const filteredScheds = state.schedules.filter(s => {
-            if (s.schedule_date !== todayStr || !activeEmpIds.has(s.employee_id)) return false;
-            if (type === 'LEAVE') return LEAVE_TYPES.includes(s.schedule_type);
-            return s.schedule_type === type;
+        
+        const empMap = new Map(state.employees.map(e => [e.id, e]));
+        const schedMap = new Map(state.schedules.filter(s => s.schedule_date === todayStr && activeEmpIds.has(s.employee_id)).map(s => [s.employee_id, s.schedule_type]));
+
+        const list = [];
+
+        state.employees.forEach(emp => {
+            const st = schedMap.get(emp.id) || 'WFO';
+
+            if (type === 'LEAVE') {
+                if (['SL', 'VL', 'EL'].includes(st)) {
+                    list.push(`<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${st} (1.0)</span></div>`);
+                } else if ((st === 'SL AM' || st === 'VL AM') && !isAfternoon) {
+                    list.push(`<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${st} (.5 AM)</span></div>`);
+                } else if ((st === 'SL PM' || st === 'VL PM') && isAfternoon) {
+                    list.push(`<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${st} (.5 PM)</span></div>`);
+                }
+            } else if (type === 'WFO') {
+                if (st === 'WFO' || ( (st === 'SL AM' || st === 'VL AM') && isAfternoon ) || ( (st === 'SL PM' || st === 'VL PM') && !isAfternoon )) {
+                    list.push(`<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${st}</span></div>`);
+                }
+            } else if (type === 'WFH') {
+                if (st === 'WFH') {
+                    list.push(`<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${st}</span></div>`);
+                }
+            }
         });
 
-        const empMap = new Map(state.employees.map(e => [e.id, e]));
-        contentHtml = filteredScheds.map(s => {
-            const emp = empMap.get(s.employee_id);
-            return emp ? `<div><strong>${emp.employee_name}</strong> (${emp.team}) - <span>${s.schedule_type}</span></div>` : '';
-        }).join('') || 'No records found for today.';
+        contentHtml = list.join('') || 'No records found for today.';
     }
 
     root.innerHTML = `
