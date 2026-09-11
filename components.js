@@ -1,3 +1,8 @@
+// Global System Constants
+window.SCHEDULE_TYPES = ['WFH', 'WFO', 'HOLIDAY', 'VL', 'SL', 'EL', 'VL AM', 'VL PM', 'SL AM', 'SL PM'];
+window.LEAVE_TYPES = ['VL', 'SL', 'EL', 'VL AM', 'VL PM', 'SL AM', 'SL PM'];
+window.PREDEFINED_TEAMS = ['EAST ASIA', 'WEST ASIA', 'JP + BB + IFF + OC'];
+
 // Reusable Toast Notifications
 const Toast = {
     container: null,
